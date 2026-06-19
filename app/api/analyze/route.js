@@ -60,10 +60,10 @@ ${resumeText}`;
     const text = payload?.choices?.[0]?.message?.content || '';
 
     const cleaned = text
-      .replace(/```json/g, '')
-      .replace(/```/g, '')
-      .trim();
-
+    .replace(/<think>[\s\S]*?<\/think>/g, '')
+    .replace(/```json/g, '')
+    .replace(/```/g, '')
+    .trim();
     if (!cleaned) {
       return Response.json({ error: 'Empty response from Qwen' }, { status: 500 });
     }
