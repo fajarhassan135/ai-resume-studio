@@ -19,18 +19,21 @@ async function parseApiResponse(response: Response) {
 }
 
 export default function Home() {
-  const [file, setFile] = useState(null);
+  const [file, setFile] = useState<File | null>(null);
   const [loading, setLoading] = useState(false);
-  const [result, setResult] = useState(null);
-  const [error, setError] = useState(null);
+  const [result, setResult] = useState<any>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [targetRole, setTargetRole] = useState('');
 
-  const handleFileChange = (e) => {
-    setFile(e.target.files[0]);
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files) {
+      setFile(e.target.files[0]);
+    }
     setResult(null);
     setError(null);
   };
 
-  const handleDrop = (e) => {
+  const handleDrop = (e: React.DragEvent<HTMLDivElement>) => {
     e.preventDefault();
     const dropped = e.dataTransfer.files[0];
     if (dropped?.type === 'application/pdf') {
@@ -49,6 +52,7 @@ export default function Home() {
     try {
       const formData = new FormData();
       formData.append('resume', file);
+      formData.append('targetRole', targetRole);
 
       const res = await fetch('/api/analyze', {
         method: 'POST',
@@ -60,7 +64,7 @@ export default function Home() {
       if (data.error) throw new Error(data.error);
       setResult(data);
     } catch (err) {
-      setError(err.message);
+      setError(err instanceof Error ? err.message : 'An unexpected error occurred');
     } finally {
       setLoading(false);
     }
@@ -86,12 +90,26 @@ export default function Home() {
           </p>
         </div>
 
+        {/* Target Role Input */}
+        <div className="mb-6">
+          <label className="block text-sm font-medium text-gray-600 mb-2">
+            Target Role (optional)
+          </label>
+          <input
+            type="text"
+            value={targetRole}
+            onChange={(e) => setTargetRole(e.target.value)}
+            placeholder="e.g. Frontend Developer, Data Analyst..."
+            className="w-full border border-gray-300 rounded-xl px-4 py-3 focus:outline-none focus:border-green-400"
+          />
+        </div>
+
         {/* Upload Area */}
         <div
           onDrop={handleDrop}
           onDragOver={(e) => e.preventDefault()}
           className="border-2 border-dashed border-gray-300 rounded-2xl p-10 text-center bg-white hover:border-green-400 transition-colors cursor-pointer"
-          onClick={() => document.getElementById('fileInput').click()}
+          onClick={() => document.getElementById('fileInput')?.click()}
         >
           <div className="text-5xl mb-4">📄</div>
           {file ? (
@@ -124,7 +142,7 @@ export default function Home() {
         {loading && (
           <div className="text-center mt-8">
             <div className="text-4xl animate-spin inline-block">⏳</div>
-            <p className="text-gray-500 mt-3">Sending to Gemini AI, please wait...</p>
+            <p className="text-gray-500 mt-3">Sending to Groq AI, please wait...</p>
           </div>
         )}
 
@@ -136,7 +154,7 @@ export default function Home() {
         )}
 
         {/* Results */}
-        {result && <Results data={result} file={file} />}
+        {result && <Results data={result} file={file} targetRole={targetRole} />}
 
       </div>
     </main>
