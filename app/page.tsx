@@ -2,7 +2,7 @@
 import { useState } from 'react';
 import Results from '../components/Results';
 
-async function parseApiResponse(response) {
+async function parseApiResponse(response: Response) {
   const raw = await response.text();
   const contentType = response.headers.get('content-type') || '';
   const isJson = contentType.includes('application/json');
