@@ -1,4 +1,3 @@
-$toggle = @'
 "use client";
 import { useEffect, useState } from "react";
 
@@ -45,5 +44,3 @@ export default function DarkModeToggle() {
     </button>
   );
 }
-'@
-Set-Content -Path "app\components\DarkModeToggle.tsx" -Value $toggle
