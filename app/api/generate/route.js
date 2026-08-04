@@ -1,6 +1,6 @@
 export const runtime = 'nodejs';
 const GROQ_API_KEY = process.env.GROQ_API_KEY || process.env.GROQCLOUD;
-const QWEN_MODEL = process.env.QWEN_MODEL || 'qwen/qwen3-32b';
+const QWEN_MODEL = process.env.QWEN_MODEL || 'qwen/qwen3.6-27b';
 
 export async function POST(request) {
   try {
