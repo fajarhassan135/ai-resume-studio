@@ -46,14 +46,22 @@ ${resumeText}`;
         model: QWEN_MODEL,
         messages: [{ role: 'user', content: prompt }],
         temperature: 0.2,
+        max_completion_tokens: 2048,
+        reasoning_effort: 'none',
       }),
     });
-
     const payload = await completion.json();
     if (!completion.ok) {
       return Response.json(
         { error: payload?.error?.message || 'Groq API request failed' },
         { status: completion.status }
+      );
+    }
+    
+    if (payload?.choices?.[0]?.finish_reason === 'length') {
+      return Response.json(
+        { error: 'Response was cut off before completing. Try increasing max_completion_tokens.' },
+        { status: 500 }
       );
     }
 
