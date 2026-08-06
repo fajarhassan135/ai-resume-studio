@@ -2,6 +2,14 @@ export const runtime = 'nodejs';
 const GROQ_API_KEY = process.env.GROQ_API_KEY || process.env.GROQCLOUD;
 const QWEN_MODEL = process.env.QWEN_MODEL || 'qwen/qwen3.6-27b';
 
+function cleanJsonResponse(raw) {
+  return raw
+    .replace(/<think>[\s\S]*?<\/think>/gi, '')
+    .replace(/```json/gi, '')
+    .replace(/```/g, '')
+    .trim();
+}
+
 export async function POST(request) {
   try {
     const formData = await request.formData();
@@ -41,16 +49,38 @@ Use this analysis to guide your improvements.`;
       }
     }
 
-    const prompt = `You are an expert resume writer. Rewrite the following resume to be highly optimized for the role: "${targetRole}".
+    const prompt = `You are an expert resume writer. Read the resume below, which belongs to a real person, and rewrite it to be highly optimized for the role: "${targetRole}". Use ONLY the person's own real information from their resume. Never invent a different name, company, degree, or fabricated statistic.
 ${analysisSummary}
 
+Return ONLY a single raw JSON object. No markdown, no code fences, no explanation, no <think> tags. It must match exactly this shape:
+
+{
+  "name": "Full name from the resume",
+  "title": "Professional title/role from the resume",
+  "contact": "One line with email, phone, location, LinkedIn, GitHub as available, separated by | ",
+  "summary": "2 to 4 sentence professional summary rewritten for the target role",
+  "skills": [
+    { "category": "Category name", "items": "Comma separated list of skills" }
+  ],
+  "projects": [
+    { "title": "Project name", "stack": "Tech stack used", "bullets": ["achievement 1", "achievement 2"], "link": "github link if present, else empty string" }
+  ],
+  "experience": [
+    { "role": "Job title", "company": "Company name", "dates": "Date range", "bullets": ["achievement 1", "achievement 2"] }
+  ],
+  "education": [
+    { "degree": "Degree name", "school": "Institution", "dates": "Date range", "details": ["relevant detail"] }
+  ],
+  "additional": { "softSkills": "Comma separated soft skills if present, else empty string", "languages": "Comma separated languages if present, else empty string" }
+}
+
 Rules:
-- Output ONLY the improved resume text. No explanations, no commentary, no <think> tags, no markdown.
 - Keep it professional, ATS-friendly, and impactful.
-- Add quantifiable achievements where possible.
-- Use strong action verbs.
-- Include relevant keywords for the target role.
-- Keep the same general structure (contact info, summary, experience, education, skills).
+- Strengthen wording and add quantifiable framing only where it is truthful based on the original resume, never invent numbers.
+- Use strong action verbs in bullets.
+- Include relevant keywords for the target role where truthful.
+- If a section does not exist in the original resume (e.g. no projects), return an empty array for it. Do not invent one.
+- Every field listed above must be present in your output even if its value is empty.
 
 Original Resume:
 ${resumeText}`;
@@ -64,7 +94,9 @@ ${resumeText}`;
       body: JSON.stringify({
         model: QWEN_MODEL,
         messages: [{ role: 'user', content: prompt }],
-        temperature: 0.4,
+        temperature: 0.3,
+        max_completion_tokens: 3000,
+        reasoning_effort: 'none',
       }),
     });
 
@@ -78,16 +110,17 @@ ${resumeText}`;
     }
 
     const raw = payload?.choices?.[0]?.message?.content || '';
+    const cleaned = cleanJsonResponse(raw);
 
-    // Strip <think> blocks and any leftover markdown
-    const generated = raw
-      .replace(/<think>[\s\S]*?<\/think>/gi, '')
-      .replace(/```[a-z]*/gi, '')
-      .replace(/```/g, '')
-      .trim();
-
-    if (!generated) {
+    if (!cleaned) {
       return Response.json({ error: 'Empty response from model' }, { status: 500 });
+    }
+
+    let generated;
+    try {
+      generated = JSON.parse(cleaned);
+    } catch {
+      return Response.json({ error: 'Model returned invalid JSON. Please try again.' }, { status: 500 });
     }
 
     return Response.json({ generated });

@@ -13,9 +13,140 @@ async function parseApiResponse(response) {
   }
 }
 
+function Section({ label, children }) {
+  return (
+    <div className="mb-5">
+      <p className="text-xs font-bold uppercase tracking-widest text-indigo-600 border-b border-gray-200 pb-1.5 mb-2.5">
+        {label}
+      </p>
+      {children}
+    </div>
+  );
+}
+
+function Bullets({ items = [] }) {
+  if (!items.length) return null;
+  return (
+    <ul className="space-y-1 mt-1">
+      {items.map((b, i) => (
+        <li key={i} className="text-sm text-gray-700 pl-4 relative leading-6">
+          <span className="absolute left-0 top-0">•</span>
+          {b}
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+function ResumeView({ resume }) {
+  if (!resume) return null;
+  const {
+    name, title, contact, summary,
+    skills = [], projects = [], experience = [], education = [],
+    additional = {},
+  } = resume;
+
+  return (
+    <div className="font-sans text-gray-800">
+      <div className="mb-5">
+        <h2 className="text-xl font-bold text-gray-900">{name}</h2>
+        {title && <p className="text-sm font-semibold text-indigo-600 mt-0.5">{title}</p>}
+        {contact && <p className="text-xs text-gray-500 mt-1.5 leading-5">{contact}</p>}
+      </div>
+
+      {summary && (
+        <Section label="Professional Summary">
+          <p className="text-sm leading-7 text-gray-700">{summary}</p>
+        </Section>
+      )}
+
+      {skills.length > 0 && (
+        <Section label="Skills">
+          <div className="space-y-1.5">
+            {skills.map((s, i) => (
+              <p key={i} className="text-sm leading-6">
+                <span className="font-semibold text-gray-800">{s.category}: </span>
+                <span className="text-gray-600">{s.items}</span>
+              </p>
+            ))}
+          </div>
+        </Section>
+      )}
+
+      {projects.length > 0 && (
+        <Section label="Projects">
+          <div className="space-y-4">
+            {projects.map((p, i) => (
+              <div key={i}>
+                <p className="text-sm font-bold text-gray-900">
+                  {p.title}
+                  {p.stack && <span className="font-normal text-gray-500"> | {p.stack}</span>}
+                </p>
+                <Bullets items={p.bullets} />
+                {p.link && <p className="text-xs text-indigo-500 mt-1">{p.link}</p>}
+              </div>
+            ))}
+          </div>
+        </Section>
+      )}
+
+      {experience.length > 0 && (
+        <Section label="Experience">
+          <div className="space-y-4">
+            {experience.map((e, i) => (
+              <div key={i}>
+                <div className="flex items-baseline justify-between gap-3">
+                  <p className="text-sm font-bold text-gray-900">{e.role}</p>
+                  <p className="text-xs text-gray-500 shrink-0">{e.dates}</p>
+                </div>
+                <p className="text-xs text-gray-600 font-medium italic mb-1">{e.company}</p>
+                <Bullets items={e.bullets} />
+              </div>
+            ))}
+          </div>
+        </Section>
+      )}
+
+      {education.length > 0 && (
+        <Section label="Education">
+          <div className="space-y-3">
+            {education.map((ed, i) => (
+              <div key={i}>
+                <div className="flex items-baseline justify-between gap-3">
+                  <p className="text-sm font-bold text-gray-900">{ed.degree}</p>
+                  <p className="text-xs text-gray-500 shrink-0">{ed.dates}</p>
+                </div>
+                <p className="text-xs text-gray-600 font-medium italic">{ed.school}</p>
+                <Bullets items={ed.details} />
+              </div>
+            ))}
+          </div>
+        </Section>
+      )}
+
+      {(additional.softSkills || additional.languages) && (
+        <Section label="Additional">
+          {additional.softSkills && (
+            <p className="text-sm leading-6">
+              <span className="font-semibold text-gray-800">Soft Skills: </span>
+              <span className="text-gray-600">{additional.softSkills}</span>
+            </p>
+          )}
+          {additional.languages && (
+            <p className="text-sm leading-6 mt-1">
+              <span className="font-semibold text-gray-800">Languages: </span>
+              <span className="text-gray-600">{additional.languages}</span>
+            </p>
+          )}
+        </Section>
+      )}
+    </div>
+  );
+}
+
 export default function Results({ data, file, targetRole }) {
   const [generating, setGenerating] = useState(false);
-  const [generated, setGenerated] = useState(null);
+  const [generated, setGenerated] = useState(null); // structured JSON object
   const [genError, setGenError] = useState(null);
   const [messages, setMessages] = useState([]);
   const [input, setInput] = useState('');
@@ -103,16 +234,207 @@ export default function Results({ data, file, targetRole }) {
   };
 
   const handleDownload = async () => {
+    if (!generated) return;
     const { jsPDF } = await import('jspdf');
-    const doc = new jsPDF();
-    const lines = doc.splitTextToSize(generated, 180);
-    let y = 15;
-    lines.forEach((line) => {
-      if (y > 280) { doc.addPage(); y = 15; }
-      doc.text(line, 15, y);
-      y += 7;
-    });
-    doc.save('improved-resume.pdf');
+    const doc = new jsPDF({ unit: 'mm', format: 'a4' });
+    const marginX = 15;
+    const pageWidth = 210;
+    const contentWidth = pageWidth - marginX * 2;
+    let y = 18;
+
+    const checkPageBreak = (needed = 8) => {
+      if (y + needed > 280) {
+        doc.addPage();
+        y = 18;
+      }
+    };
+
+    const addSectionHeader = (label) => {
+      checkPageBreak(12);
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(10);
+      doc.setTextColor(79, 70, 229);
+      doc.text(label.toUpperCase(), marginX, y);
+      y += 1.5;
+      doc.setDrawColor(210, 210, 210);
+      doc.line(marginX, y, marginX + contentWidth, y);
+      y += 5;
+      doc.setTextColor(30, 30, 30);
+    };
+
+    const addBullets = (bullets = []) => {
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(9.5);
+      doc.setTextColor(50, 50, 50);
+      bullets.forEach((b) => {
+        const lines = doc.splitTextToSize(`•  ${b}`, contentWidth - 4);
+        lines.forEach((line) => {
+          checkPageBreak();
+          doc.text(line, marginX + 4, y);
+          y += 4.6;
+        });
+      });
+    };
+
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(18);
+    doc.setTextColor(20, 20, 20);
+    doc.text(generated.name || '', marginX, y);
+    y += 6.5;
+
+    if (generated.title) {
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(10.5);
+      doc.setTextColor(79, 70, 229);
+      doc.text(generated.title, marginX, y);
+      y += 5;
+    }
+
+    if (generated.contact) {
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(8.5);
+      doc.setTextColor(110, 110, 110);
+      const contactLines = doc.splitTextToSize(generated.contact, contentWidth);
+      contactLines.forEach((line) => {
+        doc.text(line, marginX, y);
+        y += 4;
+      });
+    }
+    y += 3;
+
+    if (generated.summary) {
+      addSectionHeader('Professional Summary');
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(9.5);
+      doc.setTextColor(40, 40, 40);
+      const lines = doc.splitTextToSize(generated.summary, contentWidth);
+      lines.forEach((line) => {
+        checkPageBreak();
+        doc.text(line, marginX, y);
+        y += 4.6;
+      });
+      y += 3;
+    }
+
+    if (generated.skills?.length) {
+      addSectionHeader('Skills');
+      generated.skills.forEach((s) => {
+        checkPageBreak();
+        doc.setFont('helvetica', 'bold');
+        doc.setFontSize(9.5);
+        doc.setTextColor(30, 30, 30);
+        const label = `${s.category}: `;
+        doc.text(label, marginX, y);
+        const labelWidth = doc.getTextWidth(label);
+        doc.setFont('helvetica', 'normal');
+        doc.setTextColor(60, 60, 60);
+        const lines = doc.splitTextToSize(s.items, contentWidth - labelWidth);
+        doc.text(lines[0] || '', marginX + labelWidth, y);
+        y += 4.6;
+        for (let i = 1; i < lines.length; i++) {
+          checkPageBreak();
+          doc.text(lines[i], marginX, y);
+          y += 4.6;
+        }
+      });
+      y += 3;
+    }
+
+    if (generated.projects?.length) {
+      addSectionHeader('Projects');
+      generated.projects.forEach((p) => {
+        checkPageBreak(10);
+        doc.setFont('helvetica', 'bold');
+        doc.setFontSize(9.5);
+        doc.setTextColor(20, 20, 20);
+        const titleLine = p.stack ? `${p.title}  |  ${p.stack}` : p.title;
+        doc.text(titleLine, marginX, y);
+        y += 4.6;
+        addBullets(p.bullets);
+        if (p.link) {
+          doc.setFont('helvetica', 'italic');
+          doc.setFontSize(8.5);
+          doc.setTextColor(79, 70, 229);
+          checkPageBreak();
+          doc.text(p.link, marginX + 4, y);
+          y += 4.6;
+        }
+        y += 2;
+      });
+      y += 1;
+    }
+
+    if (generated.experience?.length) {
+      addSectionHeader('Experience');
+      generated.experience.forEach((e) => {
+        checkPageBreak(10);
+        doc.setFont('helvetica', 'bold');
+        doc.setFontSize(9.5);
+        doc.setTextColor(20, 20, 20);
+        doc.text(e.role || '', marginX, y);
+        doc.setFont('helvetica', 'normal');
+        doc.setFontSize(8.5);
+        doc.setTextColor(130, 130, 130);
+        const datesWidth = doc.getTextWidth(e.dates || '');
+        doc.text(e.dates || '', marginX + contentWidth - datesWidth, y);
+        y += 4.4;
+        doc.setFont('helvetica', 'italic');
+        doc.setFontSize(9);
+        doc.setTextColor(90, 90, 90);
+        doc.text(e.company || '', marginX, y);
+        y += 4.6;
+        doc.setTextColor(30, 30, 30);
+        addBullets(e.bullets);
+        y += 2;
+      });
+      y += 1;
+    }
+
+    if (generated.education?.length) {
+      addSectionHeader('Education');
+      generated.education.forEach((ed) => {
+        checkPageBreak(10);
+        doc.setFont('helvetica', 'bold');
+        doc.setFontSize(9.5);
+        doc.setTextColor(20, 20, 20);
+        doc.text(ed.degree || '', marginX, y);
+        doc.setFont('helvetica', 'normal');
+        doc.setFontSize(8.5);
+        doc.setTextColor(130, 130, 130);
+        const datesWidth = doc.getTextWidth(ed.dates || '');
+        doc.text(ed.dates || '', marginX + contentWidth - datesWidth, y);
+        y += 4.4;
+        doc.setFont('helvetica', 'italic');
+        doc.setFontSize(9);
+        doc.setTextColor(90, 90, 90);
+        doc.text(ed.school || '', marginX, y);
+        y += 4.6;
+        doc.setTextColor(30, 30, 30);
+        addBullets(ed.details);
+        y += 2;
+      });
+      y += 1;
+    }
+
+    if (generated.additional?.softSkills || generated.additional?.languages) {
+      addSectionHeader('Additional');
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(9.5);
+      doc.setTextColor(40, 40, 40);
+      if (generated.additional.softSkills) {
+        checkPageBreak();
+        doc.text(`Soft Skills: ${generated.additional.softSkills}`, marginX, y);
+        y += 4.6;
+      }
+      if (generated.additional.languages) {
+        checkPageBreak();
+        doc.text(`Languages: ${generated.additional.languages}`, marginX, y);
+        y += 4.6;
+      }
+    }
+
+    const fileName = (generated.name || 'improved-resume').replace(/\s+/g, '_');
+    doc.save(`${fileName}_Resume.pdf`);
   };
 
   return (
@@ -120,7 +442,6 @@ export default function Results({ data, file, targetRole }) {
 
       {/* ── Score + Summary Row ── */}
       <div className="flex items-center gap-6 bg-white border border-gray-200 rounded-2xl p-6 shadow-sm">
-        {/* Score Ring */}
         <div
           className="shrink-0 w-24 h-24 rounded-full flex flex-col items-center justify-center border-4"
           style={{ borderColor: scoreColor, background: scoreBg }}
@@ -128,7 +449,6 @@ export default function Results({ data, file, targetRole }) {
           <span className="text-3xl font-bold" style={{ color: scoreColor }}>{data.score}</span>
           <span className="text-xs font-semibold" style={{ color: scoreColor }}>{scoreLabel}</span>
         </div>
-        {/* Summary */}
         <div className="flex-1">
           <p className="text-xs font-semibold uppercase tracking-widest text-gray-400 mb-1">AI Summary</p>
           <p className="text-gray-700 font-medium leading-relaxed">{data.summary}</p>
@@ -216,13 +536,12 @@ export default function Results({ data, file, targetRole }) {
       {/* ── Two-Panel Layout ── */}
       {generated && (
         <div
-          className="w-full grid grid-cols-1 lg:grid-cols-2 gap-0 border border-gray-200 rounded-2xl overflow-hidden shadow-md"
+          className="w-full grid grid-cols-1 lg:grid-cols-2 gap-0 border border-gray-200 rounded-2xl overflow-hidden shadow-md min-h-0"
           style={{ height: '680px' }}
         >
 
           {/* LEFT — Resume Panel */}
-          <div className="flex flex-col border-r border-gray-200">
-            {/* Panel Header */}
+          <div className="flex flex-col border-r border-gray-200 min-h-0">
             <div className="flex items-center justify-between px-5 py-3.5 bg-indigo-600">
               <div>
                 <p className="text-white font-bold text-sm tracking-wide">Improved Resume</p>
@@ -236,24 +555,19 @@ export default function Results({ data, file, targetRole }) {
               </button>
             </div>
 
-            {/* Resume Content */}
-            <div className="flex-1 overflow-y-auto bg-white p-6">
-              <pre className="whitespace-pre-wrap text-gray-800 text-sm font-mono leading-relaxed">
-                {generated}
-              </pre>
+            <div className="flex-1 overflow-y-auto bg-white p-6 min-h-0">
+              <ResumeView resume={generated} />
             </div>
           </div>
 
           {/* RIGHT — AI Chat Panel */}
-          <div className="flex flex-col bg-gray-50">
-            {/* Panel Header */}
+          <div className="flex flex-col bg-gray-50 min-h-0">
             <div className="px-5 py-3.5 bg-gray-800">
               <p className="text-white font-bold text-sm tracking-wide">Refine with AI</p>
               <p className="text-gray-400 text-xs mt-0.5">Ask me to adjust any part of your resume</p>
             </div>
 
-            {/* Messages */}
-            <div className="flex-1 overflow-y-auto p-4 space-y-3">
+            <div className="flex-1 overflow-y-auto p-4 space-y-3 min-h-0">
               {messages.map((msg, i) => (
                 <div key={i} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
                   {msg.role === 'assistant' && (
@@ -290,7 +604,6 @@ export default function Results({ data, file, targetRole }) {
               <div ref={chatEndRef} />
             </div>
 
-            {/* Input */}
             <div className="p-4 border-t border-gray-200 bg-white">
               <div className="flex gap-2 items-center">
                 <input
